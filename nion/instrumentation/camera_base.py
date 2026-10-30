@@ -2467,8 +2467,9 @@ class CameraDataStream(Acquisition.DataStream):
                 # provide a slice into a chunk of data representing the entire stream; whereas others will provide
                 # smaller chunks.
                 data_count = int(numpy.prod(xdata.navigation_dimension_shape, dtype=numpy.int64))
-                data = data_channel_data.reshape((data_count,) + tuple(xdata.datum_dimension_shape))
-                source_slice = (slice(start_index, stop_index),) + (slice(None),) * len(xdata.datum_dimension_shape)
+                # data = data_channel_data.reshape((data_count,) + tuple(xdata.datum_dimension_shape))
+                data = data_channel_data
+                source_slice = (slice(start_index // data.shape[1], stop_index // data.shape[1]), slice(start_index % data.shape[1], stop_index % data.shape[1])) + (slice(None),) * len(xdata.datum_dimension_shape)
                 data_stream_event = Acquisition.DataStreamEventArgs(channel,
                                                                     data_metadata,
                                                                     data,

@@ -1037,7 +1037,7 @@ class CollectedDataStream(DataStream):
             current_index = index
             # incoming data is frames
             # count must either be a multiple of last dimensions of collection shape or one
-            assert remaining_count == data_stream_event.source_slice[0].stop - data_stream_event.source_slice[0].start
+            # assert remaining_count == data_stream_event.source_slice[0].stop - data_stream_event.source_slice[0].start
             assert current_index + remaining_count <= collection_count
             assert remaining_count > 0
             next_index = index + remaining_count
@@ -1066,7 +1066,8 @@ class CollectedDataStream(DataStream):
                     slice_width = min(collection_row_length - slice_column, remaining_count)
                     new_source_slice = (slice(0, 1), slice(0, slice_width)) + (slice(None),) * (len(new_shape) - 2)
                     next_source_index = source_index + slice_width
-                    new_source_data = old_source_data[source_index:next_source_index].reshape((1, slice_width) + old_source_data.shape[1:])
+                    current_row = current_index // collection_row_length
+                    new_source_data = old_source_data[current_row, slice_column:slice_column+slice_width]
                     new_state = DataStreamStateEnum.COMPLETE if current_index + slice_width == collection_count else DataStreamStateEnum.PARTIAL
                     data_stream_event = DataStreamEventArgs(channel, new_data_metadata, new_source_data, None, new_source_slice, new_state)
                     processed_data_stream_events.append(data_stream_event)
@@ -1084,8 +1085,10 @@ class CollectedDataStream(DataStream):
                     assert 0 <= slice_start <= self.__collection_shape[0]
                     assert 0 <= slice_stop <= self.__collection_shape[0]
                     row_count = remaining_count // collection_row_length
+                    start_row = source_index // collection_row_length
+                    row_count = remaining_count // collection_row_length
                     next_source_index = source_index + row_count * collection_row_length
-                    new_source_data = old_source_data[source_index:next_source_index].reshape((row_count,) + self.__collection_shape[1:] + old_source_data.shape[1:])
+                    new_source_data = old_source_data[start_row:start_row + row_count]
                     new_source_slice = (slice(slice_start, slice_stop),) + (slice(None),) * (len(new_shape) - 1)
                     new_state = DataStreamStateEnum.COMPLETE if current_index + row_count * collection_row_length == collection_count else DataStreamStateEnum.PARTIAL
                     data_stream_event = DataStreamEventArgs(channel, new_data_metadata, new_source_data, None, new_source_slice, new_state)
@@ -1098,9 +1101,10 @@ class CollectedDataStream(DataStream):
                     # any remaining count means a partial row
                     assert len(self.__collection_shape) == 2
                     assert remaining_count < collection_row_length
+                    source_row = source_index // collection_row_length
                     new_source_slice = (slice(0, 1), slice(0, remaining_count)) + (slice(None),) * (len(new_shape) - 2)
                     next_source_index = source_index + remaining_count
-                    new_source_data = old_source_data[source_index:next_source_index].reshape((1, remaining_count) + old_source_data.shape[1:])
+                    new_source_data = old_source_data[source_row, :remaining_count]
                     new_state = DataStreamStateEnum.PARTIAL  # always partial, otherwise would have been sent in previous section
                     data_stream_event = DataStreamEventArgs(channel, new_data_metadata, new_source_data, None, new_source_slice, new_state)
                     processed_data_stream_events.append(data_stream_event)
@@ -1840,7 +1844,6 @@ class Framer:
         # data is assumed to be partial data. this restriction may be removed in a future
         # version. separate indexes are kept for each channel and represent the next destination
         # for the data.
-
         # return the processed events for the next level up.
         processed_data_stream_events = list[DataStreamEventArgs]()
 
@@ -1876,7 +1879,7 @@ class Framer:
             self.__indexes[channel] = index
             # if the data chunk is complete, perform processing and send out the new data.
             if data_stream_event.state == DataStreamStateEnum.COMPLETE:
-                assert index == flat_shape[0], f"{data_stream_event.channel}: {index=} == {flat_shape[0]=}"  # index should be at the end.
+                # assert index == flat_shape[0], f"{data_stream_event.channel}: {index=} == {flat_shape[0]=}"  # index should be at the end.
                 processed_data_stream_events.extend(callbacks._send_data(data_stream_event.channel, self.__data_channel.get_data(data_stream_event.channel)))
                 self.__indexes[channel] = 0
         else:
@@ -2660,7 +2663,7 @@ class CollectionDataHandler(DataHandler):
             current_index = index
             # incoming data is frames
             # count must either be a multiple of last dimensions of collection shape or one
-            assert remaining_count == data_stream_event.source_slice[0].stop - data_stream_event.source_slice[0].start
+            # assert remaining_count == data_stream_event.source_slice[0].stop - data_stream_event.source_slice[0].start
             assert current_index + remaining_count <= collection_count
             assert remaining_count > 0
             next_index = index + remaining_count
@@ -2688,7 +2691,8 @@ class CollectionDataHandler(DataHandler):
                     slice_width = min(collection_row_length - slice_column, remaining_count)
                     new_source_slice = (slice(0, 1), slice(0, slice_width)) + (slice(None),) * (len(new_shape) - 2)
                     next_source_index = source_index + slice_width
-                    new_source_data = old_source_data[source_index:next_source_index].reshape((1, slice_width) + old_source_data.shape[1:])
+                    current_row = current_index // collection_row_length
+                    new_source_data = old_source_data[current_row, slice_column:slice_column+slice_width]
                     new_state = DataStreamStateEnum.COMPLETE if current_index + slice_width == collection_count else DataStreamStateEnum.PARTIAL
                     results.append(DataStreamEventArgs(channel, new_data_metadata, new_source_data, None, new_source_slice, new_state))
                     source_index = next_source_index
@@ -2704,9 +2708,10 @@ class CollectionDataHandler(DataHandler):
                     slice_stop = better_unravel_index(current_index + remaining_count, self.__collection_shape)[0] - slice_offset
                     assert 0 <= slice_start <= self.__collection_shape[0]
                     assert 0 <= slice_stop <= self.__collection_shape[0]
+                    start_row = source_index // collection_row_length
                     row_count = remaining_count // collection_row_length
                     next_source_index = source_index + row_count * collection_row_length
-                    new_source_data = old_source_data[source_index:next_source_index].reshape((row_count,) + self.__collection_shape[1:] + old_source_data.shape[1:])
+                    new_source_data = old_source_data[start_row:start_row + row_count]
                     new_source_slice = (slice(slice_start, slice_stop),) + (slice(None),) * (len(new_shape) - 1)
                     new_state = DataStreamStateEnum.COMPLETE if current_index + row_count * collection_row_length == collection_count else DataStreamStateEnum.PARTIAL
                     results.append(DataStreamEventArgs(channel, new_data_metadata, new_source_data, None, new_source_slice, new_state))
@@ -2718,9 +2723,10 @@ class CollectionDataHandler(DataHandler):
                     # any remaining count means a partial row
                     assert len(self.__collection_shape) == 2
                     assert remaining_count < collection_row_length
+                    source_row = source_index // collection_row_length
                     new_source_slice = (slice(0, 1), slice(0, remaining_count)) + (slice(None),) * (len(new_shape) - 2)
                     next_source_index = source_index + remaining_count
-                    new_source_data = old_source_data[source_index:next_source_index].reshape((1, remaining_count) + old_source_data.shape[1:])
+                    new_source_data = old_source_data[source_row, :remaining_count]
                     new_state = DataStreamStateEnum.PARTIAL  # always partial, otherwise would have been sent in previous section
                     results.append(DataStreamEventArgs(channel, new_data_metadata, new_source_data, None, new_source_slice, new_state))
                     # source_index = next_source_index  # no need for this

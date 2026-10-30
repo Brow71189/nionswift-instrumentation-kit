@@ -2818,12 +2818,12 @@ class ScanDataStream(Acquisition.DataStream):
                                                                      data_descriptor=DataAndMetadata.DataDescriptor(False, 0, 0),
                                                                      timezone=scan_data.timezone,
                                                                      timezone_offset=scan_data.timezone_offset)
-                        source_slice = (slice(start, stop),)
+                        source_slice = (slice(sent_rows, available_rows), slice(None))
                         scan_data_data = scan_data.data
                         assert scan_data_data is not None
                         data_stream_event = Acquisition.DataStreamEventArgs(channel,
                                                                             data_metadata,
-                                                                            scan_data_data.reshape(-1),
+                                                                            scan_data_data,
                                                                             stop - start,
                                                                             source_slice,
                                                                             Acquisition.DataStreamStateEnum.COMPLETE)
